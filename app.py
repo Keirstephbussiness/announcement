@@ -1,50 +1,31 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, render_template
 from flask_cors import CORS
-import requests
-import xml.etree.ElementTree as ET
+import feedparser
 
-app = Flask(__name__)
-CORS(app)  # enable CORS for frontend requests
+app = Flask(__name__, static_folder="static", template_folder="templates")
+CORS(app)
 
-RSS_URL = "https://rsshub.app/facebook/page/NCST.OfficialPage"
+# Change this to the real NCST RSS feed or an RSSHub link
+rss_url = "https://rsshub.app/facebook/page/NCST.OfficialPage"
+
+@app.route("/")
+def home():
+    return render_template("index.html")
 
 @app.route("/api/announcements")
-def announcements():
-    try:
-        resp = requests.get(RSS_URL, timeout=10)
-        resp.raise_for_status()
+def get_announcements():
+    feed = feedparser.parse(rss_url)
+    announcements = []
 
-        root = ET.fromstring(resp.content)
-        channel = root.find("channel")
-        items = channel.findall("item")
+    for entry in feed.entries[:10]:  # latest 10 posts
+        announcements.append({
+            "title": entry.title if "title" in entry else "No title",
+            "text": entry.summary if "summary" in entry else "",
+            "link": entry.link if "link" in entry else "#",
+            "image": entry.media_content[0]["url"] if "media_content" in entry else None
+        })
 
-        posts = []
-        for item in items[:10]:  # limit to 10 latest posts
-            title = item.findtext("title")
-            link = item.findtext("link")
-            pub_date = item.findtext("pubDate")
-            description = item.findtext("description")
-
-            # some feeds may contain images in <media:content> or in description
-            media_ns = "{http://search.yahoo.com/mrss/}"
-            image_url = None
-            media_content = item.find(f"{media_ns}content")
-            if media_content is not None:
-                image_url = media_content.attrib.get("url")
-
-            posts.append({
-                "title": title,
-                "link": link,
-                "date": pub_date,
-                "description": description,
-                "image": image_url
-            })
-
-        return jsonify(posts)
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
+    return jsonify(announcements)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
