@@ -1,6 +1,8 @@
 from flask import Flask, jsonify, render_template
 from flask_cors import CORS
 import feedparser
+from datetime import datetime
+import dateutil.parser
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
 CORS(app)
@@ -16,11 +18,14 @@ def announcements():
     feed = feedparser.parse(RSS_URL)
     posts = []
     for entry in feed.entries[:10]:
+        # Parse the published date if available, otherwise use current date as fallback
+        published_date = dateutil.parser.parse(entry.published) if hasattr(entry, "published") else datetime.now()
         posts.append({
             "title": entry.title,
             "link": entry.link,
             "text": entry.summary if hasattr(entry, "summary") else "",
-            "image": entry.get("media_thumbnail", [{}])[0].get("url") if entry.get("media_thumbnail") else None
+            "image": entry.get("media_thumbnail", [{}])[0].get("url") if entry.get("media_thumbnail") else None,
+            "published": published_date.isoformat()  # ISO 8601 format for JavaScript compatibility
         })
     return jsonify(posts)
 
