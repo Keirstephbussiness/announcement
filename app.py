@@ -16,8 +16,9 @@ RSS_URL = "https://rsshub.app/facebook/page/NCST.OfficialPage"
 def home():
     try:
         return render_template("index.html")
-    except Exception:
-        # If template doesn't exist, return a simple HTML page
+    except Exception as e:
+        print(f"Error rendering template: {e}")
+        # Fallback HTML page if template is missing
         return '''
         <!DOCTYPE html>
         <html>
@@ -48,6 +49,7 @@ def home():
 
 @app.route("/api/announcements")
 def announcements():
+    global RSS_URL  # Declare RSS_URL as global to allow modification
     try:
         print(f"Fetching RSS from: {RSS_URL}")
         
@@ -73,7 +75,7 @@ def announcements():
                 print(f"Trying alternative URL: {alt_url}")
                 feed = feedparser.parse(alt_url, agent='Mozilla/5.0 (compatible; RSS Reader)')
                 if feed.entries:
-                    RSS_URL = alt_url
+                    RSS_URL = alt_url  # Update the global RSS_URL
                     break
             
             if not feed.entries:
@@ -117,7 +119,6 @@ def announcements():
                 # Extract image URL from various sources
                 image_url = None
                 try:
-                    # RSSHub Facebook feeds often have images in media_thumbnail
                     if hasattr(entry, 'media_thumbnail') and entry.media_thumbnail:
                         image_url = entry.media_thumbnail[0].get('url')
                     elif hasattr(entry, 'media_content') and entry.media_content:
@@ -131,7 +132,6 @@ def announcements():
                                 image_url = enclosure.get('href')
                                 break
                     
-                    # Also check for images in content
                     if not image_url and hasattr(entry, 'summary'):
                         img_match = re.search(r'<img[^>]+src="([^"]+)"', entry.summary)
                         if img_match:
@@ -173,7 +173,6 @@ def announcements():
                 
             except Exception as e:
                 print(f"Error processing entry {i}: {e}")
-                # Add a fallback entry
                 posts.append({
                     "title": f"Announcement {i+1}",
                     "link": getattr(entry, 'link', '#'),
@@ -183,7 +182,6 @@ def announcements():
                 })
                 continue
 
-        # If still no posts, add a default message
         if not posts:
             posts = [{
                 "title": "No Announcements Available",
@@ -202,7 +200,7 @@ def announcements():
         print(f"Error in announcements endpoint: {error_msg}")
         print(f"Traceback: {error_traceback}")
         
-        # Return fallback data instead of error
+        # Return fallback data
         fallback_posts = [
             {
                 "title": "Service Temporarily Unavailable",
@@ -223,7 +221,6 @@ def not_found(error):
 def internal_error(error):
     return jsonify({"error": "Internal server error", "message": str(error)}), 500
 
-# Health check endpoint
 @app.route("/health")
 def health():
     return jsonify({"status": "healthy", "timestamp": datetime.now().isoformat()})
