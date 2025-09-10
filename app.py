@@ -7,7 +7,8 @@ import dateutil.parser
 app = Flask(__name__, template_folder="templates", static_folder="static")
 CORS(app)
 
-RSS_URL = "https://rss.app/feeds/rJbibQK5cA6ohQZv.xml"
+# Free RSS feed via RSSHub instead of rss.app (no trial)
+RSS_URL = "https://rsshub.app/facebook/page/NCST.OfficialPage"
 
 @app.route("/")
 def home():
@@ -16,17 +17,30 @@ def home():
 @app.route("/api/announcements")
 def announcements():
     feed = feedparser.parse(RSS_URL)
+
+    if not feed.entries:
+        return jsonify({"error": "Failed to fetch feed"}), 500
+
     posts = []
     for entry in feed.entries[:10]:
-        # Parse the published date if available, otherwise use current date as fallback
-        published_date = dateutil.parser.parse(entry.published) if hasattr(entry, "published") else datetime.now()
+        # Parse the published date safely
+        try:
+            published_date = dateutil.parser.parse(entry.published)
+        except Exception:
+            published_date = datetime.now()
+
         posts.append({
-            "title": entry.title,
-            "link": entry.link,
-            "text": entry.summary if hasattr(entry, "summary") else "",
-            "image": entry.get("media_thumbnail", [{}])[0].get("url") if entry.get("media_thumbnail") else None,
-            "published": published_date.isoformat()  # ISO 8601 format for JavaScript compatibility
+            "title": getattr(entry, "title", "No Title"),
+            "link": getattr(entry, "link", "#"),
+            "text": getattr(entry, "summary", ""),
+            "image": (
+                entry.get("media_thumbnail", [{}])[0].get("url")
+                if "media_thumbnail" in entry
+                else None
+            ),
+            "published": published_date.isoformat()
         })
+
     return jsonify(posts)
 
 if __name__ == "__main__":
