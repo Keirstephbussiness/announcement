@@ -7,7 +7,7 @@ import dateutil.parser
 app = Flask(__name__, template_folder="templates", static_folder="static")
 CORS(app)
 
-# Free RSS feed via RSSHub instead of rss.app (no trial)
+# Use RSSHub feed instead of rss.app
 RSS_URL = "https://rsshub.app/facebook/page/NCST.OfficialPage"
 
 @app.route("/")
@@ -18,16 +18,19 @@ def home():
 def announcements():
     feed = feedparser.parse(RSS_URL)
 
+    # If RSSHub didn’t return valid entries
     if not feed.entries:
-        return jsonify({"error": "Failed to fetch feed"}), 500
+        return jsonify({"error": "Feed is empty or invalid", "url": RSS_URL}), 500
 
     posts = []
     for entry in feed.entries[:10]:
-        # Parse the published date safely
-        try:
-            published_date = dateutil.parser.parse(entry.published)
-        except Exception:
-            published_date = datetime.now()
+        # Try to parse published date safely
+        published_date = datetime.now()
+        if hasattr(entry, "published"):
+            try:
+                published_date = dateutil.parser.parse(entry.published)
+            except Exception:
+                pass  # fallback to current time
 
         posts.append({
             "title": getattr(entry, "title", "No Title"),
@@ -44,4 +47,4 @@ def announcements():
     return jsonify(posts)
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", port=5000, debug=True)
