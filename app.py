@@ -10,16 +10,15 @@ CORS(app)
 RSSHUB_FEED_URL = "https://rsshub.app/facebook/page/NCST.OfficialPage"
 @app.after_request
 def after_request(response):
-    response.headers.add('Access-Control-Allow-Origin', '*')
     response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
     response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
     return response
 
 @app.route("/")
 def index():
-    return "NCST RSS Feed Generator is running! Use /rss to fetch the feed."
+    return "NCST RSS Feed Generator is running! Use /api/announcements to fetch the feed."
 
-@app.route("/rss")
+@app.route("/api/announcements")
 def rss_feed():
     try:
         # Fetch from RSSHub
@@ -27,7 +26,7 @@ def rss_feed():
         r.raise_for_status()
         
         # Parse feed
-        feed = feedparser.parse(feed_data)
+        feed = feedparser.parse(r.text)
         if not feed.entries:
             return Response("No entries found in feed.", status=404)
         
