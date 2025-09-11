@@ -21,7 +21,7 @@ def rss_feed():
         r.raise_for_status()
         
         # Parse feed
-        feed = feedparser.parse(r.text)
+        feed = feedparser.parse(feed_data)
         if not feed.entries:
             return Response("No entries found in feed.", status=404)
         
