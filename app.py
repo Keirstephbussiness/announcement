@@ -3,6 +3,7 @@ from flask_cors import CORS
 import requests
 import feedparser
 import logging
+import xml.sax.saxutils as saxutils
 
 app = Flask(__name__)
 # Configure CORS to allow only the specific origin
@@ -12,8 +13,8 @@ CORS(app, resources={r"/api/*": {"origins": "https://ncst-newsfeed.netlify.app"}
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Correct RSSHub route for NCST Facebook page
-RSSHUB_FEED_URL = "https://rsshub.app/facebook/page/NCST.OfficialPage"
+# Use custom RSSHub route for NCST Facebook page
+RSSHUB_FEED_URL = "https://rsshub.app/facebook/custom/NCST.OfficialPage"
 
 @app.after_request
 def after_request(response):
@@ -28,19 +29,20 @@ def index():
 @app.route("/api/announcements")
 def rss_feed():
     try:
-        # Fetch from RSSHub with a slightly increased timeout
-        r = requests.get(RSSHUB_FEED_URL, timeout=15, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
+        # Fetch from custom RSSHub route with increased timeout
+        logger.info(f"Fetching RSS feed from {RSSHUB_FEED_URL}")
+        r = requests.get(RSSHUB_FEED_URL, timeout=20, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
         r.raise_for_status()  # Raises an HTTPError for bad responses
-        logger.info("Successfully fetched RSS feed from RSSHub")
+        logger.info("Successfully fetched RSS feed")
 
         # Parse feed
         feed = feedparser.parse(r.text)
         if feed.bozo:
             logger.error(f"Feed parsing error: {feed.bozo_exception}")
-            return Response(f"Error parsing feed: {feed.bozo_exception}", status=500)
+            return Response(f"Error parsing feed: {feed.bozo_exception}", status=500, mimetype="text/plain")
         if not feed.entries:
             logger.warning("No entries found in feed")
-            return Response("No entries found in feed.", status=404)
+            return Response("No entries found in feed.", status=404, mimetype="text/plain")
 
         # Limit to 5 posts
         items = feed.entries[:5]
@@ -48,8 +50,8 @@ def rss_feed():
         # Build RSS XML
         rss_items = ""
         for item in items:
-            title = item.get("title", "No Title").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-            summary = item.get("summary", "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            title = saxutils.escape(item.get("title", "No Title"))  # Escape XML special characters
+            summary = saxutils.escape(item.get("summary", ""))  # Escape XML special characters
             rss_items += f"""
             <item>
                 <title>{title}</title>
@@ -76,13 +78,19 @@ def rss_feed():
 
     except requests.exceptions.HTTPError as http_err:
         logger.error(f"HTTP error fetching RSS feed: {http_err}")
-        return Response(f"Error fetching feed: HTTP {http_err.response.status_code}", status=500)
+        return Response(f"Error fetching feed: HTTP {http_err.response.status_code}", status=500, mimetype="text/plain")
+    except requests.exceptions.Timeout:
+        logger.error("Request timed out while fetching RSS feed")
+        return Response("Error fetching feed: Request timed out", status=500, mimetype="text/plain")
+    except requests.exceptions.ConnectionError:
+        logger.error("Connection error while fetching RSS feed")
+        return Response("Error fetching feed: Connection error", status=500, mimetype="text/plain")
     except requests.exceptions.RequestException as req_err:
         logger.error(f"Network error fetching RSS feed: {req_err}")
-        return Response(f"Error fetching feed: Network issue - {req_err}", status=500)
+        return Response(f"Error fetching feed: Network issue - {req_err}", status=500, mimetype="text/plain")
     except Exception as e:
         logger.error(f"Unexpected error: {e}")
-        return Response(f"Error fetching feed: {e}", status=500)
+        return Response(f"Error fetching feed: {e}", status=500, mimetype="text/plain")
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
