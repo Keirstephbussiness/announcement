@@ -4,3 +4,4 @@ requests
 feedparser
 python-dateutil
 gunicorn
+cachetools
