@@ -10,7 +10,8 @@ app = Flask(__name__, template_folder="templates", static_folder="static")
 CORS(app)
 
 # RSS URL - RSSHub for Facebook pages
-RSS_URL = "https://rsshub.app/facebook/page/NCST.OfficialPage"
+RSS_URL = "https://announcement-vayk.onrender.com/api/announcements
+"
 
 @app.route("/")
 def home():
