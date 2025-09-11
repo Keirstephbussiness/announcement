@@ -1,4 +1,4 @@
-from flask import Flask, Response
+from flask import Flask, jsonify, Response
 from flask_cors import CORS
 import requests
 import feedparser
@@ -21,35 +21,30 @@ def rss_feed():
         r.raise_for_status()
         feed = feedparser.parse(r.text)
 
-        items = feed.entries[:5]  # get latest 5
-        rss_items = ""
+        # Get latest 5 entries
+        items = feed.entries[:5]
+        # Prepare JSON response
+        announcements = []
         for item in items:
-            title = saxutils.escape(item.get("title", "No Title"))
-            summary = saxutils.escape(item.get("summary", ""))
-            link = item.get("link", "")
-            pubDate = item.get("published", "")
+            announcement = {
+                "title": saxutils.escape(item.get("title", "No Title")),
+                "link": item.get("link", ""),
+                "description": saxutils.escape(item.get("summary", "")),
+                "pubDate": item.get("published", "")
+            }
+            announcements.append(announcement)
 
-            rss_items += f"""
-            <item>
-                <title>{title}</title>
-                <link>{link}</link>
-                <description><![CDATA[{summary}]]></description>
-                <pubDate>{pubDate}</pubDate>
-            </item>
-            """
+        # Structure the JSON response
+        response_data = {
+            "channel": {
+                "title": "NCST Official Page",
+                "link": "https://www.facebook.com/NCST.OfficialPage",
+                "description": "Latest 5 posts from NCST Facebook Page",
+                "items": announcements
+            }
+        }
 
-        rss_xml = f"""<?xml version="1.0" encoding="UTF-8" ?>
-        <rss version="2.0">
-            <channel>
-                <title>NCST Official Page</title>
-                <link>https://www.facebook.com/NCST.OfficialPage</link>
-                <description>Latest 5 posts from NCST Facebook Page</description>
-                {rss_items}
-            </channel>
-        </rss>
-        """
-
-        return Response(rss_xml, mimetype="application/rss+xml")
+        return jsonify(response_data)
 
     except Exception as e:
         return Response(f"Error fetching feed: {e}", status=500, mimetype="text/plain")
