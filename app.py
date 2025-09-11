@@ -59,9 +59,6 @@ def rss_feed():
         
         # Return with CORS headers
         response = Response(rss_xml, mimetype="application/rss+xml")
-        response.headers["Access-Control-Allow-Origin"] = "*"
-        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
         return response
         
     except Exception as e:
