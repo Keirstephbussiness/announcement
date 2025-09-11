@@ -1,12 +1,12 @@
-from flask import Flask, jsonify, Response
+from flask import Flask, jsonify
 from flask_cors import CORS
 import requests
 import feedparser
-import xml.sax.saxutils as saxutils
+from bs4 import BeautifulSoup
+import html
 
 app = Flask(__name__)
-# Allow CORS from your frontend domain
-CORS(app, resources={r"/api/*": {"origins": "*"}})  # Replace * with your frontend URL in production
+CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 RSS_FEED_URL = "https://fetchrss.com/feed/aMKmuNc_E0HiaMKmTQ1GMV2S.rss"
 
@@ -17,48 +17,36 @@ def index():
 @app.route("/api/announcements")
 def rss_feed():
     try:
-        # Fetch the RSS feed
         r = requests.get(RSS_FEED_URL, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
-        r.raise_for_status()  # Raise exception for HTTP errors
+        r.raise_for_status()
         feed = feedparser.parse(r.text)
 
-        # Check if feed has entries
         if not feed.entries:
-            return jsonify({
-                "channel": {
-                    "title": "NCST Official Page",
-                    "link": "https://www.facebook.com/NCST.OfficialPage",
-                    "description": "Latest posts from NCST Facebook Page",
-                    "items": []
-                },
-                "message": "No entries found in the RSS feed"
-            }), 200
+            return jsonify({"items": [], "message": "No entries found"}), 200
 
-        # Get latest 5 entries
-        items = feed.entries[:5]
         announcements = []
-        for item in items:
-            announcement = {
-                "title": saxutils.escape(item.get("title", "No Title")),
+        for item in feed.entries[:5]:  # latest 5
+            # Extract images from summary/content
+            images = []
+            summary_html = item.get("summary", "")
+            soup = BeautifulSoup(summary_html, "html.parser")
+            for img in soup.find_all("img"):
+                images.append(img.get("src"))
+
+            # Clean text content
+            text = html.unescape(soup.get_text())
+
+            announcements.append({
+                "title": html.unescape(item.get("title", "No Title")),
                 "link": item.get("link", ""),
-                "description": saxutils.escape(item.get("summary", "")),
+                "text": text,
+                "image": images[0] if images else "",  # take first image if exists
                 "pubDate": item.get("published", ""),
-                "author": item.get("author", ""),  # Include author if available
-                "guid": item.get("guid", "")  # Include guid for uniqueness
-            }
-            announcements.append(announcement)
+                "author": item.get("author", ""),
+                "guid": item.get("id", "")
+            })
 
-        # Structure the JSON response
-        response_data = {
-            "channel": {
-                "title": feed.feed.get("title", "NCST Official Page"),
-                "link": feed.feed.get("link", "https://www.facebook.com/NCST.OfficialPage"),
-                "description": feed.feed.get("description", "Latest posts from NCST Facebook Page"),
-                "items": announcements
-            }
-        }
-
-        return jsonify(response_data)
+        return jsonify({"items": announcements})
 
     except requests.RequestException as e:
         return jsonify({"error": f"Failed to fetch RSS feed: {str(e)}"}), 500
