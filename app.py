@@ -13,8 +13,8 @@ CORS(app, resources={r"/api/*": {"origins": "https://ncst-newsfeed.netlify.app"}
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Use existing RSSHub route
-RSSHUB_FEED_URL = "https://rsshub.app/facebook/page/NCST.OfficialPage"
+# Use your FetchRSS feed URL
+RSS_FEED_URL = "https://fetchrss.com/feed/aMKmuNc_E0HiaMKmTQ1GMV2S.rss"
 
 # Cache RSS feed for 10 minutes
 cache = TTLCache(maxsize=1, ttl=600)
@@ -32,8 +32,8 @@ def index():
 @cached(cache)
 def fetch_rss_feed():
     try:
-        logger.info(f"Fetching RSS feed from {RSSHUB_FEED_URL}")
-        r = requests.get(RSSHUB_FEED_URL, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
+        logger.info(f"Fetching RSS feed from {RSS_FEED_URL}")
+        r = requests.get(RSS_FEED_URL, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
         r.raise_for_status()
         logger.info("Successfully fetched RSS feed")
         return r.text, None
