@@ -8,7 +8,7 @@ import html
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
-RSS_FEED_URL = "https://fetchrss.com/feed/aMKmuNc_E0HiaMKmTQ1GMV2S.rss"
+RSS_FEED_URL = "https://rss.app/feeds/rJbibQK5cA6ohQZv.xml"
 
 @app.route("/")
 def index():
