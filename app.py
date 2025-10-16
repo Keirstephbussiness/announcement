@@ -8,83 +8,87 @@ import html
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
-# Primary RSS feed (blocked sometimes)
 RSS_FEED_URL = "https://rss.app/feeds/rJbibQK5cA6ohQZv.xml"
-# Fallback RSS-to-JSON proxy
-RSS_PROXY_URL = f"https://api.rss2json.com/v1/api.json?rss_url={RSS_FEED_URL}"
+# Fallback source (the actual NCST announcements page, replace if needed)
+FALLBACK_URL = "https://www.ncst.edu.ph/news"  # ← change this if you have a more direct source
+
 
 @app.route("/")
 def index():
     return "✅ NCST RSS Feed Generator is running! Use /api/announcements to fetch the feed."
 
+
 @app.route("/api/announcements")
 def rss_feed():
     try:
-        # Try direct fetch first
+        # STEP 1: Try fetching RSS feed
         try:
             r = requests.get(RSS_FEED_URL, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
             r.raise_for_status()
             feed = feedparser.parse(r.text)
 
             if not feed.entries:
-                raise ValueError("No entries found in direct RSS")
+                raise ValueError("No entries found in RSS feed")
 
-            data_source = "direct"
-        except Exception as e:
-            # Fall back to rss2json proxy if direct RSS fails (403, timeout, etc.)
-            r = requests.get(RSS_PROXY_URL, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
-            r.raise_for_status()
-            json_data = r.json()
+            announcements = []
+            for item in feed.entries[:5]:
+                summary_html = item.get("summary", "")
+                soup = BeautifulSoup(summary_html, "html.parser")
 
-            if "items" not in json_data or not json_data["items"]:
-                raise ValueError("No entries found in proxy RSS")
+                # Extract image
+                images = [img.get("src") for img in soup.find_all("img") if img.get("src")]
+                text = html.unescape(soup.get_text().strip())
 
-            # Convert rss2json items into standard format
-            feed = {"entries": []}
-            for item in json_data["items"]:
-                feed["entries"].append({
-                    "title": item.get("title", "No Title"),
+                announcements.append({
+                    "title": html.unescape(item.get("title", "No Title")),
                     "link": item.get("link", ""),
-                    "summary": item.get("description", ""),
-                    "published": item.get("pubDate", ""),
+                    "text": text,
+                    "image": images[0] if images else "",
+                    "pubDate": item.get("published", ""),
                     "author": item.get("author", ""),
-                    "id": item.get("guid", "")
+                    "guid": item.get("id", "")
                 })
-            data_source = "proxy"
 
-        # Parse and clean the feed
-        announcements = []
-        for item in feed["entries"][:5]:  # limit to latest 5
-            summary_html = item.get("summary", "")
-            soup = BeautifulSoup(summary_html, "html.parser")
+            return jsonify({"items": announcements, "source": "rss"}), 200
 
-            # Extract images
-            images = [img.get("src") for img in soup.find_all("img") if img.get("src")]
+        except Exception as e:
+            # STEP 2: Fallback to HTML scraping if RSS fails
+            print(f"⚠️ RSS fetch failed: {str(e)} — using HTML fallback.")
+            html_page = requests.get(FALLBACK_URL, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
+            html_page.raise_for_status()
+            soup = BeautifulSoup(html_page.text, "html.parser")
 
-            # Clean text
-            text = html.unescape(soup.get_text().strip())
+            # Adapt these selectors based on NCST’s website structure
+            articles = soup.select("article, .news-item, .post")[:5]
 
-            announcements.append({
-                "title": html.unescape(item.get("title", "No Title")),
-                "link": item.get("link", ""),
-                "text": text,
-                "image": images[0] if images else "",
-                "pubDate": item.get("published", ""),
-                "author": item.get("author", ""),
-                "guid": item.get("id", "")
-            })
+            if not articles:
+                raise ValueError("No articles found on fallback page")
 
-        return jsonify({
-            "items": announcements,
-            "source": data_source
-        }), 200
+            announcements = []
+            for article in articles:
+                title_el = article.select_one("h2, .title, .news-title")
+                link_el = article.select_one("a[href]")
+                img_el = article.select_one("img")
+                date_el = article.select_one(".date, time, .post-date")
+                desc_el = article.select_one("p, .summary, .excerpt")
+
+                announcements.append({
+                    "title": title_el.get_text(strip=True) if title_el else "No Title",
+                    "link": link_el["href"] if link_el and link_el.has_attr("href") else "",
+                    "text": desc_el.get_text(strip=True) if desc_el else "",
+                    "image": img_el["src"] if img_el and img_el.has_attr("src") else "",
+                    "pubDate": date_el.get_text(strip=True) if date_el else "",
+                    "author": "NCST Official",
+                    "guid": ""
+                })
+
+            return jsonify({"items": announcements, "source": "html_fallback"}), 200
 
     except requests.RequestException as e:
-        return jsonify({"error": f"Failed to fetch RSS feed: {str(e)}"}), 500
+        return jsonify({"error": f"Network error: {str(e)}"}), 500
     except Exception as e:
-        return jsonify({"error": f"Error processing feed: {str(e)}"}), 500
+        return jsonify({"error": f"Unexpected error: {str(e)}"}), 500
 
 
 if __name__ == "__main__":
-    # Run on all interfaces, suitable for production or deployment on Render, Vercel, or Replit
     app.run(host="0.0.0.0", port=5000, debug=True)
